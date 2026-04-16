@@ -9,7 +9,7 @@ dependencies = []
 [dependency-groups]
 dev = [
     "awsiotsdk>=1.28.0",
-    "boto3>=1.37.38",
+    "boto3>=1.42.89",
     "homeassistant==2026.3.2",
     "mypy>=1.15.0",
     "niquests>=3.18.4",
