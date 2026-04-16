@@ -11,7 +11,7 @@ dev = [
     "awsiotsdk>=1.28.0",
     "boto3>=1.37.38",
     "homeassistant==2026.3.2",
-    "mypy>=1.15.0",
+    "mypy>=1.20.1",
     "niquests>=3.18.4",
     "pycognito>=2024.5.1",
     "pytest>=9.0",
