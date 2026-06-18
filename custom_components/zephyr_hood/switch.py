@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
+from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -32,10 +32,14 @@ class ZephyrPowerSwitch(ZephyrEntity, SwitchEntity):
 
     When the hood is powered off, the fan and light are also turned off
     by the hardware.  This switch controls the hood power state (0/1).
+
+    Note: because the integration uses cloud polling (30-second interval),
+    fan and light entities may continue to show their previous state for up
+    to 30 seconds after power is switched off.  This is expected behaviour
+    and not a bug.
     """
 
     _attr_name = "Power"
-    _attr_device_class = SwitchDeviceClass.SWITCH
     _attr_translation_key = "power"
 
     def __init__(
@@ -44,7 +48,7 @@ class ZephyrPowerSwitch(ZephyrEntity, SwitchEntity):
         config_entry_id: str,
     ) -> None:
         """Initialise the power switch entity."""
-        super().__init__(coordinator, config_entry_id)
+        super().__init__(coordinator)
         self._attr_unique_id = f"{config_entry_id}_power"
 
     @property

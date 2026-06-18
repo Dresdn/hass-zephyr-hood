@@ -49,7 +49,7 @@ class ZephyrLight(ZephyrEntity, LightEntity):
         config_entry_id: str,
     ) -> None:
         """Initialise the light entity."""
-        super().__init__(coordinator, config_entry_id)
+        super().__init__(coordinator)
         self._attr_unique_id = f"{config_entry_id}_light"
 
     # ------------------------------------------------------------------
@@ -70,7 +70,7 @@ class ZephyrLight(ZephyrEntity, LightEntity):
             return None
         level = self.coordinator.data.light
         if level == LIGHT_OFF:
-            return 0
+            return None
         return value_to_brightness(_BRIGHTNESS_SCALE, level)
 
     # ------------------------------------------------------------------
@@ -81,7 +81,7 @@ class ZephyrLight(ZephyrEntity, LightEntity):
         """Turn the light on, optionally at a given brightness."""
         if ATTR_BRIGHTNESS in kwargs:
             raw = brightness_to_value(_BRIGHTNESS_SCALE, kwargs[ATTR_BRIGHTNESS])
-            level = max(LIGHT_LEVEL_MIN, round(raw))
+            level = min(LIGHT_LEVEL_MAX, max(LIGHT_LEVEL_MIN, round(raw)))
         else:
             # Default to full brightness when no level specified
             level = LIGHT_LEVEL_MAX

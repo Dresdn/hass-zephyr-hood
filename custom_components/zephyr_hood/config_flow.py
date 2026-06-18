@@ -15,7 +15,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.core import callback
 
-from .api import ZephyrAuthError, ZephyrClient
+from .api import ZephyrApiError, ZephyrAuthError, ZephyrClient, ZephyrConnectionError
 from .const import (
     COGNITO_APP_CLIENT_ID,
     COGNITO_APP_CLIENT_SECRET,
@@ -31,11 +31,14 @@ from .const import (
     CONF_MODEL_NAME,
     CONF_PASSWORD,
     CONF_SERIAL_NUMBER,
+    CONF_SHADOW_COMMAND_SECTION,
     CONF_THING_NAME,
     CONF_USERNAME,
     DOMAIN,
     GEMTEKS_BASE_URL,
     IOT_ENDPOINT,
+    SHADOW_COMMAND_SECTION_REPORTED,
+    SHADOW_COMMAND_SECTIONS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -72,18 +75,18 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
             self._username = user_input[CONF_USERNAME]
             self._password = user_input[CONF_PASSWORD]
 
+            client = ZephyrClient(
+                username=self._username,
+                password=self._password,
+            )
             try:
-                client = ZephyrClient(
-                    username=self._username,
-                    password=self._password,
-                )
                 await self.hass.async_add_executor_job(client.authenticate)
                 self._devices = await self.hass.async_add_executor_job(
                     client.get_devices
                 )
             except ZephyrAuthError:
                 errors["base"] = "invalid_auth"
-            except Exception:
+            except ZephyrConnectionError, ZephyrApiError:
                 _LOGGER.exception("Unexpected error during Zephyr setup")
                 errors["base"] = "cannot_connect"
             else:
@@ -94,20 +97,19 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                     return await self._create_entry(self._devices[0])
                 else:
                     return await self.async_step_device()
+            finally:
+                await self.hass.async_add_executor_job(client.close)
 
         return self.async_show_form(
             step_id="user",
             data_schema=STEP_USER_SCHEMA,
             errors=errors,
-            description_placeholders={},
         )
 
     async def async_step_device(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Let the user choose which device to add when multiple are found."""
-        errors: dict[str, str] = {}
-
         device_map = {dev.thing_name: dev.model_name for dev in self._devices}
 
         if user_input is not None:
@@ -125,7 +127,6 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_THING_NAME): vol.In(device_map),
                 }
             ),
-            errors=errors,
         )
 
     async def _create_entry(self, device: Any) -> ConfigFlowResult:
@@ -160,15 +161,15 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
         reauth_entry = self._get_reauth_entry()
 
         if user_input is not None:
+            client = ZephyrClient(
+                username=reauth_entry.data[CONF_USERNAME],
+                password=user_input[CONF_PASSWORD],
+            )
             try:
-                client = ZephyrClient(
-                    username=reauth_entry.data[CONF_USERNAME],
-                    password=user_input[CONF_PASSWORD],
-                )
                 await self.hass.async_add_executor_job(client.authenticate)
             except ZephyrAuthError:
                 errors["base"] = "invalid_auth"
-            except Exception:
+            except ZephyrConnectionError, ZephyrApiError:
                 _LOGGER.exception("Unexpected error during Zephyr reauth")
                 errors["base"] = "cannot_connect"
             else:
@@ -176,6 +177,8 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                     reauth_entry,
                     data_updates={CONF_PASSWORD: user_input[CONF_PASSWORD]},
                 )
+            finally:
+                await self.hass.async_add_executor_job(client.close)
 
         return self.async_show_form(
             step_id="reauth_confirm",
@@ -191,15 +194,15 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
         reconfigure_entry = self._get_reconfigure_entry()
 
         if user_input is not None:
+            client = ZephyrClient(
+                username=user_input[CONF_USERNAME],
+                password=user_input[CONF_PASSWORD],
+            )
             try:
-                client = ZephyrClient(
-                    username=user_input[CONF_USERNAME],
-                    password=user_input[CONF_PASSWORD],
-                )
                 await self.hass.async_add_executor_job(client.authenticate)
             except ZephyrAuthError:
                 errors["base"] = "invalid_auth"
-            except Exception:
+            except ZephyrConnectionError, ZephyrApiError:
                 _LOGGER.exception("Unexpected error during Zephyr reconfiguration")
                 errors["base"] = "cannot_connect"
             else:
@@ -210,6 +213,8 @@ class ZephyrConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_PASSWORD: user_input[CONF_PASSWORD],
                     },
                 )
+            finally:
+                await self.hass.async_add_executor_job(client.close)
 
         return self.async_show_form(
             step_id="reconfigure",
@@ -279,6 +284,13 @@ class ZephyrOptionsFlow(OptionsFlow):
                             CONF_COGNITO_IDENTITY_POOL_ID, COGNITO_IDENTITY_POOL_ID
                         ),
                     ): str,
+                    vol.Required(
+                        CONF_SHADOW_COMMAND_SECTION,
+                        default=opts.get(
+                            CONF_SHADOW_COMMAND_SECTION,
+                            SHADOW_COMMAND_SECTION_REPORTED,
+                        ),
+                    ): vol.In(SHADOW_COMMAND_SECTIONS),
                 }
             ),
         )
